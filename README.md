@@ -33,7 +33,7 @@ Including an example of how to use your role (for instance, with variables passe
 NOTE
 ----
 
-This role is designed to be run with both 32 and 64 bit versions of Pytnon but the tar file files/cache-python.tar only contains a 32 bit version of Pythonbind.so and so there is an exit in the playbook when a 64 bit architecture is detected.
+This role is designed to be run with both 32 and 64 bit versions of Python but the tar file files/cache-python.tar only contains a 32 bit version of Pythonbind.so and so there is an exit in the playbook when a 64 bit architecture is detected.
 
 License
 -------
