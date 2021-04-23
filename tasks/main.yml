@@ -1,0 +1,85 @@
+---
+# tasks file for cachepython
+- name: Get the version of Python running on the system
+  command: python -V
+  register: pvers
+
+- name: Get the chip architecture
+  command: uname -a
+  register: chip_arch
+
+- name: Print message about not being able to run on 64 bit architecture
+  debug:
+    msg="The role can only run on 32 bit sustems. See README for more details"
+  when: play
+  when: chip_arch.stdout is search("x86_64")
+
+- name: Quit if the architecture is 64 bit
+  meta: end_play
+  when: chip_arch.stdout is search("x86_64")
+
+- name: Install Python-devel
+  zypper:
+   name: "python-devel"
+   state: "present"
+  when: ansible_distribution is search("SUSE")
+
+- name: Install Python-devel
+  yum:
+   name: "python-devel"
+   state: "present"
+  when: ansible_distribution is not search("SUSE")
+
+
+- name: copy Python templates
+  template:
+     src: "{{ item.src }}"
+     dest: "{{ item.dest }}"
+     owner: root
+     group: root
+     mode: "{{ item.mode }}"
+  loop:
+     - { src: "templates/testauto.py", dest: "/tmp/testauto.py", mode: "0744" }
+     - { src: "templates/test3auto.py", dest: "/tmp/test3auto.py", mode: "0744" }
+
+- name: Extract cache-python.tar
+  unarchive:
+    src: files/cache-python.tar
+    dest: /
+
+- name: Copy install script to server
+  copy:
+    src: files/install.sh
+    dest: /tmp/install.sh
+    mode: "0744"
+
+- name: Run the install script for 64 bit architecture
+  command: /tmp/install.sh 64
+  when: chip_arch.stdout is search("x86_64")
+
+- name: Run the install script for 32 bit architecture
+  command: /tmp/install.sh 32
+  when: chip_arch.stdout is not search("x86_64")
+
+- name: Verify that the install is working as expected
+  command: "/tmp/testauto.py"
+  environment:
+    LD_LIBRARY_PATH: "/usr/local/cache-python/bin"
+  register: outpt
+  when: pvers.stderr is search("Python 2")
+
+- name: Print the verification output
+  debug: msg="{{ outpt.stdout }}"
+  when: pvers.stderr is search("Python 2")
+
+- name: Verify that the install is working as expected
+  command: "/tmp/test3auto.py"
+  environment:
+    LD_LIBRARY_PATH: "/usr/local/cache-python/bin"
+  register: outpt
+  when: pvers.stderr is search("Python 3")
+
+- name: Print the verification output
+  debug: msg="{{ outpt.stdout }}"
+  when: pvers.stderr is search("Python 3")
+
