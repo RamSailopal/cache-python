@@ -3,15 +3,16 @@
 - name: Get the version of Python running on the system
   command: python -V
   register: pvers
+  changed_when: pvers.stdout is not search("")
 
 - name: Get the chip architecture
   command: uname -a
   register: chip_arch
+  changed_when: chip_arch.stdout is not search("")
 
 - name: Print message about not being able to run on 64 bit architecture
   debug:
     msg="The role can only run on 32 bit sustems. See README for more details"
-  when: play
   when: chip_arch.stdout is search("x86_64")
 
 - name: Quit if the architecture is 64 bit
