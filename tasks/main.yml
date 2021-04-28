@@ -1,9 +1,15 @@
 ---
 # tasks file for cachepython
 - name: Get the version of Python running on the system
-  command: python -V
-  register: pvers
-  changed_when: pvers.stdout is not search("")
+  stat:
+    path: /usr/bin/python3
+  register: pvers3
+  changed_when: pvers3.stat.exists == "True"
+- name: Get the version of Python running on the system
+  stat:
+    path: /usr/bin/python2
+  register: pvers2
+  changed_when: pvers2.stat.exists == "True"
 - name: Get the chip architecture
   command: uname -a
   register: chip_arch
@@ -15,16 +21,60 @@
 - name: Quit if the architecture is 64 bit
   meta: end_play
   when: chip_arch.stdout is search("x86_64")
-- name: Install Python-devel
-  zypper:
-   name: "python-devel"
-   state: "present"
+- name: Make sure python-xml is installed to allow for yum and zypper to run through Ansible
+  command: 'zypper install -y python-xml'
   when: ansible_distribution is search("SUSE")
-- name: Install Python-devel
-  yum:
-   name: "python-devel"
-   state: "present"
+  tags:
+    - skip_ansible_lint # Need to install python-xml to get Ansible zypper/yum module to work - Chicken and egg!!
+- name: Make sure python-xml is installed to allow for yum and zypper to run through Ansible
+  command: 'yum install -y python-xml'
   when: ansible_distribution is not search("SUSE")
+  tags:
+    - skip_ansible_lint # Need to install python-xml to get Ansible zypper/yum module to work - Chicken and egg!!
+- name: Make sure that make and gcc are installed
+  zypper:
+   name: "{{ item }}"
+   state: "present"
+  loop:
+    - make
+    - gcc
+  when: ansible_distribution is search("SUSE")
+- name: Make sure that make and gcc are installed
+  yum:
+   name: "{{ item }}"
+   state: "present"
+  loop:
+    - make
+    - gcc
+  when: ansible_distribution is not search("SUSE")
+- name: Make sure that python-devel is installed
+  yum:
+   name: "{{ item }}"
+   state: "present"
+  loop:
+    - python-devel
+  when: ansible_distribution is not search("SUSE") and pvers2.stat.exists
+- name: Make sure that python-devel is installed
+  zypper:
+   name: "{{ item }}"
+   state: "present"
+  loop:
+    - python-devel
+  when: ansible_distribution is search("SUSE") and pvers2.stat.exists
+- name: Make sure that python-devel is installed
+  yum:
+   name: "{{ item }}"
+   state: "present"
+  loop:
+    - python3-devel
+  when: ansible_distribution is not search("SUSE") and pvers3.stat.exists
+- name: Make sure that python-devel is installed
+  zypper:
+   name: "{{ item }}"
+   state: "present"
+  loop:
+    - python3-devel
+  when: ansible_distribution is search("SUSE") and pvers3.stat.exists
 - name: copy Python templates
   template:
      src: "{{ item.src }}"
@@ -39,32 +89,43 @@
   unarchive:
     src: files/cache-python.tar
     dest: /
-- name: Copy install script to server
-  copy:
-    src: files/install.sh
-    dest: /tmp/install.sh
-    mode: "0744"
-- name: Run the install script for 64 bit architecture
-  command: /tmp/install.sh 64
-  when: chip_arch.stdout is search("x86_64")
-- name: Run the install script for 32 bit architecture
-  command: /tmp/install.sh 32
-  when: chip_arch.stdout is not search("x86_64")
+- name: Run the install script for python version 2
+  command: python2 setup.py install
+  args:
+     chdir: /usr/local/cache-python/dev/python
+  environment:
+    LD_LIBRARY_PATH: "/usr/local/cache-python/bin"
+  when: pvers2.stat.exists
+- name: Run the install script for python version 3
+  command: python3 setup3.py install
+  args:
+     chdir: /usr/local/cache-python/dev/python
+  environment:
+    LD_LIBRARY_PATH: "/usr/local/cache-python/bin"
+  when: pvers3.stat.exists
 - name: Verify that the install is working as expected
   command: "/tmp/testauto.py"
   environment:
     LD_LIBRARY_PATH: "/usr/local/cache-python/bin"
   register: outpt
-  when: pvers.stderr is search("Python 2")
+  when: pvers2.stat.exists
 - name: Print the verification output
   debug: msg="{{ outpt.stdout }}"
-  when: pvers.stderr is search("Python 2")
+  when: pvers2.stat.exists
 - name: Verify that the install is working as expected
   command: "/tmp/test3auto.py"
   environment:
     LD_LIBRARY_PATH: "/usr/local/cache-python/bin"
   register: outpt
-  when: pvers.stderr is search("Python 3")
+  when: pvers3.stat.exists
 - name: Print the verification output
   debug: msg="{{ outpt.stdout }}"
-  when: pvers.stderr is search("Python 3")
+  when: pvers3.stat.exists
+- name: Print the verification output
+  debug: msg="{{ outpt.stdout }}"
+- name: Print whether the install has gone through or not
+  debug: msg="INTERSYSTEMS CACHE PYTHON BINDING HAS BEEN INSTALLED SUCCESSFULLY"
+  when: outpt.stdout is search("Test completed successfully")
+- name: Print whether the install has gone through or not
+  fail: msg="INTERSYSTEMS CACHE PYTHON BINDING HAS NOT BEEN INSTALLED SUCCESSFULLY"
+  when: outpt.stdout is not search("Test completed successfully")
