@@ -21,16 +21,6 @@
 - name: Quit if the architecture is 64 bit
   meta: end_play
   when: chip_arch.stdout is search("x86_64")
-- name: Make sure python-xml is installed to allow for yum and zypper to run through Ansible
-  command: 'zypper install -y python-xml'
-  when: ansible_distribution is search("SUSE")
-  tags:
-    - skip_ansible_lint # Need to install python-xml to get Ansible zypper/yum module to work - Chicken and egg!!
-- name: Make sure python-xml is installed to allow for yum and zypper to run through Ansible
-  command: 'yum install -y python-xml'
-  when: ansible_distribution is not search("SUSE")
-  tags:
-    - skip_ansible_lint # Need to install python-xml to get Ansible zypper/yum module to work - Chicken and egg!!
 - name: Make sure that make and gcc are installed
   zypper:
    name: "{{ item }}"
@@ -46,14 +36,22 @@
   loop:
     - make
     - gcc
-  when: ansible_distribution is not search("SUSE")
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux
+- name: Make sure that make and gcc are installed
+  apt:
+   name: "{{ item }}"
+   state: "present"
+  loop:
+    - make
+    - gcc
+  when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu
 - name: Make sure that python-devel is installed
   yum:
    name: "{{ item }}"
    state: "present"
   loop:
     - python-devel
-  when: ansible_distribution is not search("SUSE") and pvers2.stat.exists
+  when: (ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux) and pvers2.stat.exists
 - name: Make sure that python-devel is installed
   zypper:
    name: "{{ item }}"
@@ -62,12 +60,26 @@
     - python-devel
   when: ansible_distribution is search("SUSE") and pvers2.stat.exists
 - name: Make sure that python-devel is installed
+  apt:
+   name: "{{ item }}"
+   state: "present"
+  loop:
+    - python-devel
+  when: (ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu') and pvers2.stat.exists
+- name: Make sure that python-devel is installed
   yum:
    name: "{{ item }}"
    state: "present"
   loop:
     - python3-devel
-  when: ansible_distribution is not search("SUSE") and pvers3.stat.exists
+  when: (ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux) and pvers3.stat.exists
+- name: Make sure that python-devel is installed
+  yum:
+   name: "{{ item }}"
+   state: "present"
+  loop:
+    - python3-devel
+  when: (ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu') and pvers3.stat.exists
 - name: Make sure that python-devel is installed
   zypper:
    name: "{{ item }}"
